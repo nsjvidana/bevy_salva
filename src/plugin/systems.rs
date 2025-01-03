@@ -86,7 +86,7 @@ pub fn init_fluids(
 }
 
 pub fn apply_fluid_user_changes(
-    mut q_contexts: WriteSalvaContext,
+    mut context_writer: WriteSalvaContext,
     mut append_q: Query<
         (&SalvaFluidHandle, &SalvaContextEntityLink, &mut AppendNonPressureForces),
         Changed<AppendNonPressureForces>,
@@ -98,7 +98,7 @@ pub fn apply_fluid_user_changes(
 ) {
     // Handles nonpressure forces the user wants to append to fluids
     for (handle, link, mut appends) in append_q.iter_mut() {
-        let context = q_contexts.context(link);
+        let context = context_writer.context(link);
         context
             .liquid_world
             .fluids_mut()
@@ -110,7 +110,7 @@ pub fn apply_fluid_user_changes(
 
     // Handles nonpressure forces the user wants to remove from fluids
     for (handle, link, mut removals) in remove_at_q.iter_mut() {
-        let context = q_contexts.context(link);
+        let context = context_writer.context(link);
         let nonpressure_forces = &mut context
             .liquid_world
             .fluids_mut()
@@ -126,15 +126,19 @@ pub fn apply_fluid_user_changes(
 pub fn sync_removals(
     mut removed_particle_positions: RemovedComponents<FluidParticlePositions>,
     mut removed_fluids: RemovedComponents<SalvaFluidHandle>,
-    mut salva_context: ResMut<SalvaContext>,
+    mut context_writer: WriteSalvaContext
 ) {
     //remove fluids whos entities had their salva fluid handle or fluid particle components removed
     for entity in removed_fluids
         .read()
         .chain(removed_particle_positions.read())
     {
-        let handle = *salva_context.entity2fluid.get(&entity).unwrap();
-        salva_context.liquid_world.remove_fluid(handle);
+        let Some((context, handle)) = context_writer.salva_context
+            .iter_mut()
+            .find_map(|context| {
+                context.entity2fluid.remove(&entity).map(|h| (context, h))
+            });
+        context.liquid_world.remove_fluid(handle);
     }
 }
 
