@@ -4,13 +4,16 @@ use salva::math::Vector;
 use salva::object::interaction_groups::InteractionGroups;
 use salva::{math::Point, object::Fluid};
 
-#[cfg(feature = "rapier")]
-use bevy_rapier::prelude::WriteDefaultRapierContext;
-use bevy_rapier::prelude::WriteRapierContext;
 use crate::fluid::{AppendNonPressureForces, RemoveNonPressureForcesAt};
 use crate::math::Vect;
 use crate::plugin::salva_context::SalvaContext;
-use crate::plugin::{DefaultSalvaContext, SalvaContextEntityLink, WriteDefaultSalvaContext, WriteSalvaContext};
+use crate::plugin::{DefaultSalvaContext, SalvaContextAccess, SalvaContextEntityLink, WriteDefaultSalvaContext, WriteSalvaContext};
+
+#[cfg(feature = "rapier")]
+use bevy_rapier::prelude::WriteDefaultRapierContext;
+#[cfg(feature = "rapier")]
+use bevy_rapier::prelude::WriteRapierContext;
+#[cfg(feature = "rapier")]
 use crate::rapier_integration::SalvaRapierCouplingLink;
 
 pub fn init_fluids(
@@ -100,7 +103,7 @@ pub fn apply_fluid_user_changes(
 ) {
     // Handles nonpressure forces the user wants to append to fluids
     for (handle, link, mut appends) in append_q.iter_mut() {
-        let context = context_writer.context(link);
+        let mut context = context_writer.context(link);
         context
             .liquid_world
             .fluids_mut()
@@ -112,7 +115,7 @@ pub fn apply_fluid_user_changes(
 
     // Handles nonpressure forces the user wants to remove from fluids
     for (handle, link, mut removals) in remove_at_q.iter_mut() {
-        let context = context_writer.context(link);
+        let mut context = context_writer.context(link);
         let nonpressure_forces = &mut context
             .liquid_world
             .fluids_mut()
@@ -135,12 +138,14 @@ pub fn sync_removals(
         .read()
         .chain(removed_particle_positions.read())
     {
-        let Some((context, handle)) = context_writer.salva_context
+        if let Some((mut context, handle)) = context_writer.salva_context
             .iter_mut()
-            .find_map(|context| {
+            .find_map(|mut context| {
                 context.entity2fluid.remove(&entity).map(|h| (context, h))
-            });
-        context.liquid_world.remove_fluid(handle);
+            })
+        {
+            context.liquid_world.remove_fluid(handle);
+        }
     }
 }
 
@@ -155,7 +160,7 @@ pub fn step_simulation(
 ) {
     for (entity, mut context) in salva_context.iter_mut() {
         #[cfg(feature = "rapier")]
-        if let Some(rapier_coupling_link) = rapier_coupling_q.get(entity) {
+        if let Ok(rapier_coupling_link) = rapier_coupling_q.get(entity) {
             let mut rapier_context = write_rapier_context
                 .try_context_from_entity(rapier_coupling_link.rapier_context_entity)
                 .expect("Couldn't find RapierContext coupled to SalvaContext entity {entity}");
@@ -182,12 +187,12 @@ pub fn step_simulation(
 }
 
 pub fn writeback_particle_positions(
-    salva_context: Res<SalvaContext>,
-    mut fluid_pos_q: Query<(&SalvaFluidHandle, &mut FluidParticlePositions)>,
+    read_context: SalvaContextAccess,
+    mut fluid_pos_q: Query<(&SalvaFluidHandle, &SalvaContextEntityLink, &mut FluidParticlePositions)>,
 ) {
-    let fluids = salva_context.liquid_world.fluids();
-    for (handle, mut particle_positions) in fluid_pos_q.iter_mut() {
-        let positions = &fluids.get(handle.0).unwrap().positions;
+    for (handle, link, mut particle_positions) in fluid_pos_q.iter_mut() {
+        let context = read_context.context(link);
+        let positions = &context.liquid_world.fluids().get(handle.0).unwrap().positions;
         
         #[cfg(feature = "dim2")]
         {
