@@ -165,24 +165,32 @@ pub fn step_simulation(
                 .try_context_from_entity(rapier_coupling_link.rapier_context_entity)
                 .expect("Couldn't find RapierContext coupled to SalvaContext entity {entity}");
             #[cfg(feature = "dim2")]
-            context.step(
+            context.step_with_rapier_coupling(
                 time.delta_secs(),
                 &Vector::new(0., -9.81), //TODO: make gravity customizable
-                #[cfg(feature = "rapier")]
                 &mut rapier_context,
             );
             #[cfg(feature = "dim3")]
-            context.step(
+            context.step_with_rapier_coupling(
                 time.delta_secs(),
                 &Vector::new(0., -9.81, 0.),
-                #[cfg(feature = "rapier")]
                 &mut rapier_context,
             );
             continue;
         }
 
-        #[cfg(not(feature = "rapier"))]
-        context.step(time.delta_secs(), &Vector::new(0., -9.81));
+        {
+            #[cfg(feature = "dim2")]
+            context.step(
+                time.delta_secs(),
+                &Vector::new(0., -9.81) //TODO: make gravity customizable
+            );
+            #[cfg(feature = "dim3")]
+            context.step(
+                time.delta_secs(),
+                &Vector::new(0., -9.81, 0.)
+            );
+        }
     }
 }
 

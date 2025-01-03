@@ -24,7 +24,7 @@ pub struct SalvaContext {
 
 impl SalvaContext {
     #[cfg(feature = "rapier")]
-    pub fn step(&mut self, dt: f32, gravity: &Vector<f32>, rapier_context: &mut RapierContext) {
+    pub fn step_with_rapier_coupling(&mut self, dt: f32, gravity: &Vector<f32>, rapier_context: &mut RapierContext) {
         self.liquid_world.step_with_coupling(
             dt,
             gravity,
@@ -34,8 +34,6 @@ impl SalvaContext {
         );
     }
 
-
-    #[cfg(not(feature = "rapier"))]
     pub fn step(&mut self, dt: f32, gravity: &Vector<f32>) {
         self.liquid_world.step(
             dt,

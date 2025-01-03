@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::plugin::{systems, DefaultSalvaContext, SalvaContextEntityLink};
-use bevy::prelude::{warn, Commands, IntoSystemSetConfigs, Name, PreStartup, Reflect, Res, Resource, SystemSet, TransformSystem};
+use bevy::prelude::{warn, Commands, Entity, IntoSystemSetConfigs, Name, PreStartup, Query, Reflect, Res, Resource, SystemSet, TransformSystem, With};
 use bevy::{
     app::{Plugin, PostUpdate},
     ecs::{
@@ -15,6 +15,8 @@ use salva::{
     LiquidWorld,
 };
 use crate::math::Real;
+use salva::solver::DFSPHSolver;
+use crate::plugin::salva_context::SalvaContext;
 
 #[cfg(feature = "rapier")]
 use crate::rapier_integration;
@@ -22,8 +24,10 @@ use crate::rapier_integration;
 use salva::integrations::rapier::ColliderCouplingSet;
 #[cfg(feature = "rapier")]
 use bevy_rapier::plugin::PhysicsSet;
-use salva::solver::DFSPHSolver;
-use crate::plugin::salva_context::SalvaContext;
+#[cfg(feature = "rapier")]
+use bevy_rapier::prelude::DefaultRapierContext;
+#[cfg(feature = "rapier")]
+use crate::rapier_integration::SalvaRapierCouplingLink;
 
 //TODO: use a feature for enabling coupling with bevy_rapier
 pub struct SalvaPhysicsPlugin {
@@ -191,6 +195,8 @@ pub enum SalvaSimulationSet {
 pub fn insert_default_world(
     mut commands: Commands,
     initialization_data: Res<SalvaContextInitialization>,
+    #[cfg(feature = "rapier")]
+    default_rapier_context: Query<Entity, With<DefaultRapierContext>>
 ) {
     match initialization_data.as_ref() {
         SalvaContextInitialization::NoAutomaticSalvaContext => {}
@@ -198,7 +204,9 @@ pub fn insert_default_world(
             particle_radius, smoothing_factor
         } => {
             let solver: DFSPHSolver = DFSPHSolver::new();
-            commands.spawn((
+
+            #[allow(unused_variables)]
+            let mut salva_context = commands.spawn((
                 Name::new("Salva Context"),
                 SalvaContext {
                     liquid_world: LiquidWorld::new(solver, *particle_radius, *smoothing_factor),
@@ -208,6 +216,14 @@ pub fn insert_default_world(
                 },
                 DefaultSalvaContext,
             ));
+
+            #[cfg(feature = "rapier")]
+            {
+                let rapier_context_entity = default_rapier_context.get_single().unwrap();
+                salva_context.insert(SalvaRapierCouplingLink {
+                    rapier_context_entity
+                });
+            };
         }
     }
 }
