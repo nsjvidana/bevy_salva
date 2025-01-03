@@ -41,6 +41,13 @@ pub struct RapierColliderSampling {
 #[derive(Component)]
 pub struct ColliderBoundaryHandle(pub BoundaryHandle);
 
+/// The component added to [`SalvaContext`] entities that declares which [`RapierContext`]
+/// entity the [`SalvaContext`] entity has its simulation coupled with. 
+#[derive(Component)]
+pub struct SalvaRapierCouplingLink {
+    pub rapier_context_entity: Entity,
+}
+
 pub fn sample_rapier_colliders(
     mut commands: Commands,
     colliders: Query<
@@ -80,4 +87,3 @@ pub fn sample_rapier_colliders(
             .insert(ColliderBoundaryHandle(bo_handle));
     }
 }
-

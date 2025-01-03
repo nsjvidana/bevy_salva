@@ -6,10 +6,12 @@ use salva::{math::Point, object::Fluid};
 
 #[cfg(feature = "rapier")]
 use bevy_rapier::prelude::WriteDefaultRapierContext;
+use bevy_rapier::prelude::WriteRapierContext;
 use crate::fluid::{AppendNonPressureForces, RemoveNonPressureForcesAt};
 use crate::math::Vect;
 use crate::plugin::salva_context::SalvaContext;
 use crate::plugin::{DefaultSalvaContext, SalvaContextEntityLink, WriteDefaultSalvaContext, WriteSalvaContext};
+use crate::rapier_integration::SalvaRapierCouplingLink;
 
 pub fn init_fluids(
     mut commands: Commands,
@@ -142,27 +144,41 @@ pub fn sync_removals(
     }
 }
 
-//for now, just assume that everything is run in bevy's post update step
+//for now, just assume that everything is run in bevy's fixed update step
 pub fn step_simulation(
-    mut salva_context: ResMut<SalvaContext>,
+    mut salva_context: Query<(Entity, &mut SalvaContext)>,
     #[cfg(feature = "rapier")]
-    mut rapier_context: WriteDefaultRapierContext,
+    mut rapier_coupling_q: Query<&SalvaRapierCouplingLink>,
+    #[cfg(feature = "rapier")]
+    mut write_rapier_context: WriteRapierContext,
     time: Res<Time>,
 ) {
-    #[cfg(feature = "dim2")]
-    salva_context.step(
-        time.delta_secs(),
-        &Vector::new(0., -9.81),
+    for (entity, mut context) in salva_context.iter_mut() {
         #[cfg(feature = "rapier")]
-        &mut rapier_context,
-    );
-    #[cfg(feature = "dim3")]
-    salva_context.step(
-        time.delta_secs(),
-        &Vector::new(0., -9.81, 0.),
-        #[cfg(feature = "rapier")]
-        &mut rapier_context,
-    );
+        if let Some(rapier_coupling_link) = rapier_coupling_q.get(entity) {
+            let mut rapier_context = write_rapier_context
+                .try_context_from_entity(rapier_coupling_link.rapier_context_entity)
+                .expect("Couldn't find RapierContext coupled to SalvaContext entity {entity}");
+            #[cfg(feature = "dim2")]
+            context.step(
+                time.delta_secs(),
+                &Vector::new(0., -9.81), //TODO: make gravity customizable
+                #[cfg(feature = "rapier")]
+                &mut rapier_context,
+            );
+            #[cfg(feature = "dim3")]
+            context.step(
+                time.delta_secs(),
+                &Vector::new(0., -9.81, 0.),
+                #[cfg(feature = "rapier")]
+                &mut rapier_context,
+            );
+            continue;
+        }
+
+        #[cfg(not(feature = "rapier"))]
+        context.step(time.delta_secs(), &Vector::new(0., -9.81));
+    }
 }
 
 pub fn writeback_particle_positions(
