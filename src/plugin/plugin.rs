@@ -32,7 +32,7 @@ pub struct SalvaPhysicsPlugin {
     world_setup: SalvaContextInitialization,
 }
 
-impl SalvaPhysicsPlugin<S> {
+impl SalvaPhysicsPlugin {
     pub const DEFAULT_PARTICLE_RADIUS: Real = 0.05;
     pub const DEFAULT_SMOOTHING_FACTOR: Real = 2.0;
 
@@ -100,7 +100,7 @@ impl SalvaPhysicsPlugin<S> {
     }
 }
 
-impl Plugin for SalvaPhysicsPlugin<S> {
+impl Plugin for SalvaPhysicsPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
         app
             .register_type::<DefaultSalvaContext>()

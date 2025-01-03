@@ -5,7 +5,7 @@ use bevy_rapier::plugin::ReadDefaultRapierContext;
 use salva::integrations::rapier::ColliderSampling;
 use salva::object::{Boundary, BoundaryHandle};
 use salva::object::interaction_groups::InteractionGroups;
-use crate::plugin::SalvaContext;
+use crate::plugin::{SalvaContext, SalvaContextEntityLink, WriteSalvaContext};
 #[allow(unused_imports)]
 use crate::plugin::SalvaPhysicsPlugin;
 
@@ -42,7 +42,7 @@ pub struct RapierColliderSampling {
 pub struct ColliderBoundaryHandle(pub BoundaryHandle);
 
 /// The component added to [`SalvaContext`] entities that declares which [`RapierContext`]
-/// entity the [`SalvaContext`] entity has its simulation coupled with. 
+/// entity the [`SalvaContext`] entity has its simulation coupled with.
 #[derive(Component)]
 pub struct SalvaRapierCouplingLink {
     pub rapier_context_entity: Entity,
@@ -51,14 +51,15 @@ pub struct SalvaRapierCouplingLink {
 pub fn sample_rapier_colliders(
     mut commands: Commands,
     colliders: Query<
-        (Entity, &RapierColliderHandle, &RapierColliderSampling),
+        (Entity, &RapierColliderHandle, &RapierColliderSampling, &SalvaContextEntityLink),
         Without<ColliderBoundaryHandle>,
     >,
-    mut salva_context: ResMut<SalvaContext>,
+    mut context_writer: WriteSalvaContext,
     rapier_context: ReadDefaultRapierContext,
 ) {
-    let radius = salva_context.liquid_world.particle_radius();
-    for (entity, co_handle, sampling) in colliders.iter() {
+    for (entity, co_handle, sampling, salva_link) in colliders.iter() {
+        let mut salva_context = context_writer.context(salva_link);
+        let radius = salva_context.liquid_world.particle_radius();
         let co = rapier_context.colliders.get(co_handle.0).unwrap();
         let bo_handle = salva_context
             .liquid_world
