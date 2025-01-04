@@ -1,5 +1,3 @@
-//TODO: salva context, default read/write, SalvaEntity query data
-
 use salva::math::Vector;
 use bevy::prelude::{Component, Entity, Mut, Query, Reflect, Resource, With};
 use salva::LiquidWorld;
@@ -8,14 +6,16 @@ use std::ops::{Deref, DerefMut};
 use bevy::ecs::query::QueryData;
 use bevy::ecs::system::SystemParam;
 use salva::object::FluidHandle;
+use crate::plugin::configuration::SalvaConfiguration;
+use salva::coupling::CouplingManager;
 
 #[cfg(feature = "rapier")]
 use salva::integrations::rapier::ColliderCouplingSet;
 #[cfg(feature = "rapier")]
 use bevy_rapier::plugin::RapierContext;
-use salva::coupling::CouplingManager;
 
 #[derive(Component)]
+#[require(SalvaConfiguration)]
 pub struct SalvaContext {
     pub liquid_world: LiquidWorld,
     pub entity2fluid: HashMap<Entity, FluidHandle>,

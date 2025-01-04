@@ -158,7 +158,7 @@ impl Plugin for SalvaPhysicsPlugin {
             // rapier context isn't public.
             #[cfg(feature = "rapier")]
             app.add_systems(
-                PostStartup, 
+                PostStartup,
                 rapier_integration::link_default_contexts.before(SalvaSimulationSet::SyncBackend)
             );
 
@@ -207,6 +207,7 @@ pub fn insert_default_world(
             particle_radius, smoothing_factor
         } => {
             let solver: DFSPHSolver = DFSPHSolver::new();
+            // Required SalvaConfiguration is added automatically w/ default values
             commands.spawn((
                 Name::new("Salva Context"),
                 SalvaContext {

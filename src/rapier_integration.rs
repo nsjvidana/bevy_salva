@@ -1,12 +1,12 @@
 use bevy::prelude::{Commands, Component, Entity, Query, Res, ResMut, Time, With, Without};
 use bevy_rapier::geometry::RapierColliderHandle;
 use bevy_rapier::parry::math::Point;
-use bevy_rapier::plugin::{DefaultRapierContext, ReadDefaultRapierContext, WriteRapierContext};
+use bevy_rapier::plugin::{DefaultRapierContext, RapierConfiguration, ReadDefaultRapierContext, WriteRapierContext};
 use salva::integrations::rapier::{ColliderCouplingSet, ColliderSampling};
 use salva::math::Vector;
 use salva::object::{Boundary, BoundaryHandle};
 use salva::object::interaction_groups::InteractionGroups;
-use crate::plugin::{DefaultSalvaContext, SalvaContext, SalvaContextEntityLink, SalvaContextInitialization, WriteSalvaContext};
+use crate::plugin::{DefaultSalvaContext, SalvaConfiguration, SalvaContext, SalvaContextEntityLink, SalvaContextInitialization, WriteSalvaContext};
 #[allow(unused_imports)]
 use crate::plugin::SalvaPhysicsPlugin;
 
@@ -54,11 +54,11 @@ pub struct SalvaRapierCouplingLink {
 
 // WIP: for now, just assume that everything is run in bevy's fixed update step
 pub fn step_simulation_rapier_coupling(
-    mut salva_context_q: Query<(&mut SalvaContext, &mut SalvaRapierCouplingLink)>,
+    mut salva_context_q: Query<(&mut SalvaContext, &mut SalvaRapierCouplingLink, &SalvaConfiguration)>,
     mut write_rapier_context: WriteRapierContext,
     time: Res<Time>,
 ) {
-    for (mut context, mut link) in salva_context_q.iter_mut() {
+    for (mut context, mut link, config) in salva_context_q.iter_mut() {
         let rapier_context = write_rapier_context
             .try_context_from_entity(link.rapier_context_entity)
             .expect("Couldn't find RapierContext coupled to SalvaContext entity {entity}")
@@ -67,14 +67,14 @@ pub fn step_simulation_rapier_coupling(
         #[cfg(feature = "dim2")]
         context.step_with_coupling(
             time.delta_secs(),
-            &Vector::new(0., -9.81), //TODO: make gravity customizable
+            &config.gravity.into(),
             &mut link.coupling
                 .as_manager_mut(&rapier_context.colliders, &mut rapier_context.bodies),
         );
         #[cfg(feature = "dim3")]
         context.step_with_coupling(
             time.delta_secs(),
-            &Vector::new(0., -9.81, 0.), //TODO: make gravity customizable
+            &config.gravity.into(),
             &mut link.coupling
                 .as_manager_mut(&rapier_context.colliders, &mut rapier_context.bodies),
         );
@@ -130,19 +130,27 @@ pub fn sample_rapier_colliders(
 pub fn link_default_contexts(
     mut commands: Commands,
     initialization_data: Res<SalvaContextInitialization>,
-    default_salva_context: Query<Entity, (With<DefaultSalvaContext>, Without<SalvaRapierCouplingLink>)>,
-    default_rapier_context: Query<Entity, With<DefaultRapierContext>>,
+    mut default_salva_context: Query<
+        (Entity, &mut SalvaConfiguration),
+        (With<DefaultSalvaContext>, Without<SalvaRapierCouplingLink>)
+    >,
+    mut default_rapier_context: Query<(Entity, &mut RapierConfiguration), With<DefaultRapierContext>>,
 ) {
     match initialization_data.as_ref() {
         SalvaContextInitialization::NoAutomaticSalvaContext => {}
         SalvaContextInitialization::InitializeDefaultSalvaContext {
             particle_radius: _particle_radius, smoothing_factor: _smoothing_factor
         } => {
-            commands.entity(default_salva_context.get_single().unwrap())
+            let (salva_context_entity, mut salva_config) = default_salva_context
+                .get_single_mut().unwrap();
+            let (rapier_context_entity, mut rapier_config) = default_rapier_context
+                .get_single_mut().unwrap();
+            commands.entity(salva_context_entity)
                 .insert(SalvaRapierCouplingLink {
-                    rapier_context_entity: default_rapier_context.get_single().unwrap(),
+                    rapier_context_entity,
                     coupling: ColliderCouplingSet::new(),
                 });
+            salva_config.gravity = rapier_config.gravity;
         }
     }
 }

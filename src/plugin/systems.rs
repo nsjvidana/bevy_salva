@@ -7,7 +7,7 @@ use salva::{math::Point, object::Fluid};
 use crate::fluid::{AppendNonPressureForces, RemoveNonPressureForcesAt};
 use crate::math::Vect;
 use crate::plugin::salva_context::SalvaContext;
-use crate::plugin::{DefaultSalvaContext, SalvaContextAccess, SalvaContextEntityLink, WriteDefaultSalvaContext, WriteSalvaContext};
+use crate::plugin::{DefaultSalvaContext, SalvaConfiguration, SalvaContextAccess, SalvaContextEntityLink, WriteDefaultSalvaContext, WriteSalvaContext};
 
 pub fn init_fluids(
     mut commands: Commands,
@@ -144,19 +144,23 @@ pub fn sync_removals(
 
 // WIP: for now, just assume that everything is run in bevy's fixed update step
 pub fn step_simulation(
-    mut salva_context: Query<&mut SalvaContext>,
+    mut salva_context: Query<(&mut SalvaContext, &SalvaConfiguration)>,
     time: Res<Time>,
 ) {
-    for mut context in salva_context.iter_mut() {
+    for (mut context, config) in salva_context.iter_mut() {
+        if !config.default_step_active {
+            continue;
+        }
+
         #[cfg(feature = "dim2")]
         context.step(
             time.delta_secs(),
-            &Vector::new(0., -9.81) //TODO: make gravity customizable
+            &config.gravity.into()
         );
         #[cfg(feature = "dim3")]
         context.step(
             time.delta_secs(),
-            &Vector::new(0., -9.81, 0.)
+            &config.gravity.into()
         );
     }
 }
