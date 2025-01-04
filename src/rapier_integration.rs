@@ -84,15 +84,26 @@ pub fn step_simulation_rapier_coupling(
 pub fn sample_rapier_colliders(
     mut commands: Commands,
     colliders: Query<
-        (Entity, &RapierColliderHandle, &RapierColliderSampling, &SalvaContextEntityLink),
+        (Entity, &RapierColliderHandle, &RapierColliderSampling, Option<&SalvaContextEntityLink>),
         Without<ColliderBoundaryHandle>,
     >,
     mut rapier_coupling_q: Query<&mut SalvaRapierCouplingLink>,
+    q_default_context: Query<Entity, With<DefaultSalvaContext>>,
     mut context_writer: WriteSalvaContext,
     rapier_context: ReadDefaultRapierContext,
 ) {
     for (entity, co_handle, sampling, salva_link) in colliders.iter() {
-        let mut salva_context = context_writer.context(salva_link);
+        let mut entity_cmd = commands.entity(entity);
+        let salva_link = salva_link.map_or_else(
+            || {
+                let context_entity = q_default_context.get_single().unwrap();
+                entity_cmd.insert(SalvaContextEntityLink(context_entity));
+                SalvaContextEntityLink(context_entity)
+            },
+            |link| *link
+        );
+
+        let mut salva_context = context_writer.context(&salva_link);
         let coupling = &mut rapier_coupling_q.get_mut(salva_link.0).unwrap().coupling;
 
         let radius = salva_context.liquid_world.particle_radius();
@@ -118,9 +129,7 @@ pub fn sample_rapier_colliders(
             },
         );
 
-        commands
-            .get_entity(entity)
-            .unwrap()
+        entity_cmd
             .insert(ColliderBoundaryHandle(bo_handle));
     }
 }
