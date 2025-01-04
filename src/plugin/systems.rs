@@ -9,13 +9,6 @@ use crate::math::Vect;
 use crate::plugin::salva_context::SalvaContext;
 use crate::plugin::{DefaultSalvaContext, SalvaContextAccess, SalvaContextEntityLink, WriteDefaultSalvaContext, WriteSalvaContext};
 
-#[cfg(feature = "rapier")]
-use bevy_rapier::prelude::WriteDefaultRapierContext;
-#[cfg(feature = "rapier")]
-use bevy_rapier::prelude::WriteRapierContext;
-#[cfg(feature = "rapier")]
-use crate::rapier_integration::SalvaRapierCouplingLink;
-
 pub fn init_fluids(
     mut commands: Commands,
     mut new_fluids: Query<
@@ -149,52 +142,22 @@ pub fn sync_removals(
     }
 }
 
-//for now, just assume that everything is run in bevy's fixed update step
+// WIP: for now, just assume that everything is run in bevy's fixed update step
 pub fn step_simulation(
-    mut salva_context: Query<(Entity, &mut SalvaContext)>,
-    #[cfg(feature = "rapier")]
-    mut rapier_coupling_q: Query<&mut SalvaRapierCouplingLink>,
-    #[cfg(feature = "rapier")]
-    mut write_rapier_context: WriteRapierContext,
+    mut salva_context: Query<&mut SalvaContext>,
     time: Res<Time>,
 ) {
-    for (entity, mut context) in salva_context.iter_mut() {
-        #[cfg(feature = "rapier")]
-        if let Ok(mut rapier_coupling_link) = rapier_coupling_q.get_mut(entity) {
-            let rapier_context = write_rapier_context
-                .try_context_from_entity(rapier_coupling_link.rapier_context_entity)
-                .expect("Couldn't find RapierContext coupled to SalvaContext entity {entity}")
-                .into_inner();
-
-            #[cfg(feature = "dim2")]
-            context.step_with_coupling(
-                time.delta_secs(),
-                &Vector::new(0., -9.81), //TODO: make gravity customizable
-                &mut rapier_coupling_link.coupling
-                    .as_manager_mut(&rapier_context.colliders, &mut rapier_context.bodies),
-            );
-            #[cfg(feature = "dim3")]
-            context.step_with_coupling(
-                time.delta_secs(),
-                &Vector::new(0., -9.81, 0.), //TODO: make gravity customizable
-                &mut rapier_coupling_link.coupling
-                    .as_manager_mut(&rapier_context.colliders, &mut rapier_context.bodies),
-            );
-            continue;
-        }
-
-        {
-            #[cfg(feature = "dim2")]
-            context.step(
-                time.delta_secs(),
-                &Vector::new(0., -9.81) //TODO: make gravity customizable
-            );
-            #[cfg(feature = "dim3")]
-            context.step(
-                time.delta_secs(),
-                &Vector::new(0., -9.81, 0.)
-            );
-        }
+    for mut context in salva_context.iter_mut() {
+        #[cfg(feature = "dim2")]
+        context.step(
+            time.delta_secs(),
+            &Vector::new(0., -9.81) //TODO: make gravity customizable
+        );
+        #[cfg(feature = "dim3")]
+        context.step(
+            time.delta_secs(),
+            &Vector::new(0., -9.81, 0.)
+        );
     }
 }
 

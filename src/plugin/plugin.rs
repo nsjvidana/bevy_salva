@@ -22,7 +22,6 @@ use crate::plugin::salva_context::SalvaContext;
 use crate::rapier_integration;
 #[cfg(feature = "rapier")]
 use bevy_rapier::plugin::PhysicsSet;
-use crate::rapier_integration::link_default_contexts;
 
 //TODO: use a feature for enabling coupling with bevy_rapier
 pub struct SalvaPhysicsPlugin {
@@ -73,7 +72,10 @@ impl SalvaPhysicsPlugin {
                 .chain()
                 .in_set(SalvaSimulationSet::SyncBackend),
             SalvaSimulationSet::StepSimulation => {
-                (systems::step_simulation).in_set(SalvaSimulationSet::StepSimulation)
+                (
+                    systems::step_simulation,
+                    rapier_integration::step_simulation_rapier_coupling
+                ).in_set(SalvaSimulationSet::StepSimulation)
             }
             SalvaSimulationSet::Writeback => (systems::writeback_particle_positions,)
                 .chain()
@@ -155,7 +157,10 @@ impl Plugin for SalvaPhysicsPlugin {
             // This system needs to run a bit later because the system that initializes the default
             // rapier context isn't public.
             #[cfg(feature = "rapier")]
-            app.add_systems(PostStartup, link_default_contexts.before(SalvaSimulationSet::SyncBackend));
+            app.add_systems(
+                PostStartup, 
+                rapier_integration::link_default_contexts.before(SalvaSimulationSet::SyncBackend)
+            );
 
             //TODO: implement a TimestepMode like how bevy_rapier has it
         }

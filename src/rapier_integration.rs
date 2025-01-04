@@ -1,8 +1,9 @@
-use bevy::prelude::{Commands, Component, Entity, Query, Res, ResMut, With, Without};
+use bevy::prelude::{Commands, Component, Entity, Query, Res, ResMut, Time, With, Without};
 use bevy_rapier::geometry::RapierColliderHandle;
 use bevy_rapier::parry::math::Point;
-use bevy_rapier::plugin::{DefaultRapierContext, ReadDefaultRapierContext};
+use bevy_rapier::plugin::{DefaultRapierContext, ReadDefaultRapierContext, WriteRapierContext};
 use salva::integrations::rapier::{ColliderCouplingSet, ColliderSampling};
+use salva::math::Vector;
 use salva::object::{Boundary, BoundaryHandle};
 use salva::object::interaction_groups::InteractionGroups;
 use crate::plugin::{DefaultSalvaContext, SalvaContext, SalvaContextEntityLink, SalvaContextInitialization, WriteSalvaContext};
@@ -49,6 +50,35 @@ pub struct ColliderBoundaryHandle(pub BoundaryHandle);
 pub struct SalvaRapierCouplingLink {
     pub rapier_context_entity: Entity,
     pub coupling: ColliderCouplingSet,
+}
+
+// WIP: for now, just assume that everything is run in bevy's fixed update step
+pub fn step_simulation_rapier_coupling(
+    mut salva_context_q: Query<(&mut SalvaContext, &mut SalvaRapierCouplingLink)>,
+    mut write_rapier_context: WriteRapierContext,
+    time: Res<Time>,
+) {
+    for (mut context, mut link) in salva_context_q.iter_mut() {
+        let rapier_context = write_rapier_context
+            .try_context_from_entity(link.rapier_context_entity)
+            .expect("Couldn't find RapierContext coupled to SalvaContext entity {entity}")
+            .into_inner();
+
+        #[cfg(feature = "dim2")]
+        context.step_with_coupling(
+            time.delta_secs(),
+            &Vector::new(0., -9.81), //TODO: make gravity customizable
+            &mut link.coupling
+                .as_manager_mut(&rapier_context.colliders, &mut rapier_context.bodies),
+        );
+        #[cfg(feature = "dim3")]
+        context.step_with_coupling(
+            time.delta_secs(),
+            &Vector::new(0., -9.81, 0.), //TODO: make gravity customizable
+            &mut link.coupling
+                .as_manager_mut(&rapier_context.colliders, &mut rapier_context.bodies),
+        );
+    }
 }
 
 pub fn sample_rapier_colliders(
