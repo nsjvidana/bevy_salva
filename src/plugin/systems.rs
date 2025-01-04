@@ -153,28 +153,32 @@ pub fn sync_removals(
 pub fn step_simulation(
     mut salva_context: Query<(Entity, &mut SalvaContext)>,
     #[cfg(feature = "rapier")]
-    mut rapier_coupling_q: Query<&SalvaRapierCouplingLink>,
+    mut rapier_coupling_q: Query<&mut SalvaRapierCouplingLink>,
     #[cfg(feature = "rapier")]
     mut write_rapier_context: WriteRapierContext,
     time: Res<Time>,
 ) {
     for (entity, mut context) in salva_context.iter_mut() {
         #[cfg(feature = "rapier")]
-        if let Ok(rapier_coupling_link) = rapier_coupling_q.get(entity) {
-            let mut rapier_context = write_rapier_context
+        if let Ok(mut rapier_coupling_link) = rapier_coupling_q.get_mut(entity) {
+            let rapier_context = write_rapier_context
                 .try_context_from_entity(rapier_coupling_link.rapier_context_entity)
-                .expect("Couldn't find RapierContext coupled to SalvaContext entity {entity}");
+                .expect("Couldn't find RapierContext coupled to SalvaContext entity {entity}")
+                .into_inner();
+
             #[cfg(feature = "dim2")]
-            context.step_with_rapier_coupling(
+            context.step_with_coupling(
                 time.delta_secs(),
                 &Vector::new(0., -9.81), //TODO: make gravity customizable
-                &mut rapier_context,
+                &mut rapier_coupling_link.coupling
+                    .as_manager_mut(&rapier_context.colliders, &mut rapier_context.bodies),
             );
             #[cfg(feature = "dim3")]
-            context.step_with_rapier_coupling(
+            context.step_with_coupling(
                 time.delta_secs(),
-                &Vector::new(0., -9.81, 0.),
-                &mut rapier_context,
+                &Vector::new(0., -9.81, 0.), //TODO: make gravity customizable
+                &mut rapier_coupling_link.coupling
+                    .as_manager_mut(&rapier_context.colliders, &mut rapier_context.bodies),
             );
             continue;
         }

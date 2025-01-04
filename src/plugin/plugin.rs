@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::plugin::{systems, DefaultSalvaContext, SalvaContextEntityLink};
-use bevy::prelude::{warn, Commands, Entity, IntoSystemSetConfigs, Name, PreStartup, Query, Reflect, Res, Resource, SystemSet, TransformSystem, With};
+use bevy::prelude::{warn, Commands, Entity, IntoSystemSetConfigs, Name, PostStartup, PreStartup, Query, Reflect, Res, Resource, Startup, SystemSet, TransformSystem, With, Without, World};
 use bevy::{
     app::{Plugin, PostUpdate},
     ecs::{
@@ -21,13 +21,8 @@ use crate::plugin::salva_context::SalvaContext;
 #[cfg(feature = "rapier")]
 use crate::rapier_integration;
 #[cfg(feature = "rapier")]
-use salva::integrations::rapier::ColliderCouplingSet;
-#[cfg(feature = "rapier")]
 use bevy_rapier::plugin::PhysicsSet;
-#[cfg(feature = "rapier")]
-use bevy_rapier::prelude::DefaultRapierContext;
-#[cfg(feature = "rapier")]
-use crate::rapier_integration::SalvaRapierCouplingLink;
+use crate::rapier_integration::link_default_contexts;
 
 //TODO: use a feature for enabling coupling with bevy_rapier
 pub struct SalvaPhysicsPlugin {
@@ -157,6 +152,11 @@ impl Plugin for SalvaPhysicsPlugin {
                 ),
             );
 
+            // This system needs to run a bit later because the system that initializes the default
+            // rapier context isn't public.
+            #[cfg(feature = "rapier")]
+            app.add_systems(PostStartup, link_default_contexts.before(SalvaSimulationSet::SyncBackend));
+
             //TODO: implement a TimestepMode like how bevy_rapier has it
         }
     }
@@ -195,8 +195,6 @@ pub enum SalvaSimulationSet {
 pub fn insert_default_world(
     mut commands: Commands,
     initialization_data: Res<SalvaContextInitialization>,
-    #[cfg(feature = "rapier")]
-    default_rapier_context: Query<Entity, With<DefaultRapierContext>>
 ) {
     match initialization_data.as_ref() {
         SalvaContextInitialization::NoAutomaticSalvaContext => {}
@@ -204,26 +202,14 @@ pub fn insert_default_world(
             particle_radius, smoothing_factor
         } => {
             let solver: DFSPHSolver = DFSPHSolver::new();
-
-            #[allow(unused_variables)]
-            let mut salva_context = commands.spawn((
+            commands.spawn((
                 Name::new("Salva Context"),
                 SalvaContext {
                     liquid_world: LiquidWorld::new(solver, *particle_radius, *smoothing_factor),
                     entity2fluid: HashMap::default(),
-                    #[cfg(feature = "rapier")]
-                    coupling: ColliderCouplingSet::new(),
                 },
                 DefaultSalvaContext,
             ));
-
-            #[cfg(feature = "rapier")]
-            {
-                let rapier_context_entity = default_rapier_context.get_single().unwrap();
-                salva_context.insert(SalvaRapierCouplingLink {
-                    rapier_context_entity
-                });
-            };
         }
     }
 }

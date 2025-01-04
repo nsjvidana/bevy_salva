@@ -13,24 +13,24 @@ use salva::object::FluidHandle;
 use salva::integrations::rapier::ColliderCouplingSet;
 #[cfg(feature = "rapier")]
 use bevy_rapier::plugin::RapierContext;
+use salva::coupling::CouplingManager;
 
 #[derive(Component)]
 pub struct SalvaContext {
     pub liquid_world: LiquidWorld,
-    #[cfg(feature = "rapier")]
-    pub coupling: ColliderCouplingSet,
     pub entity2fluid: HashMap<Entity, FluidHandle>,
 }
 
 impl SalvaContext {
-    #[cfg(feature = "rapier")]
-    pub fn step_with_rapier_coupling(&mut self, dt: f32, gravity: &Vector<f32>, rapier_context: &mut RapierContext) {
+    pub fn step_with_coupling(
+        &mut self, dt: f32,
+        gravity: &Vector<f32>,
+        coupling: &mut impl CouplingManager
+    ) {
         self.liquid_world.step_with_coupling(
             dt,
             gravity,
-            &mut self
-                .coupling
-                .as_manager_mut(&rapier_context.colliders, &mut rapier_context.bodies),
+            coupling
         );
     }
 

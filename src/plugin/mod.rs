@@ -1,7 +1,7 @@
 pub use crate::fluid::AppendNonPressureForces;
 pub use crate::fluid::RemoveNonPressureForcesAt;
 pub use self::plugin::{
-    SalvaPhysicsPlugin, SalvaSimulationSet
+    SalvaPhysicsPlugin, SalvaSimulationSet, SalvaContextInitialization
 };
 pub use salva_context::*;
 

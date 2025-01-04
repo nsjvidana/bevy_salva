@@ -1,11 +1,11 @@
-use bevy::prelude::{Commands, Component, Entity, Query, ResMut, Without};
+use bevy::prelude::{Commands, Component, Entity, Query, Res, ResMut, With, Without};
 use bevy_rapier::geometry::RapierColliderHandle;
 use bevy_rapier::parry::math::Point;
-use bevy_rapier::plugin::ReadDefaultRapierContext;
-use salva::integrations::rapier::ColliderSampling;
+use bevy_rapier::plugin::{DefaultRapierContext, ReadDefaultRapierContext};
+use salva::integrations::rapier::{ColliderCouplingSet, ColliderSampling};
 use salva::object::{Boundary, BoundaryHandle};
 use salva::object::interaction_groups::InteractionGroups;
-use crate::plugin::{SalvaContext, SalvaContextEntityLink, WriteSalvaContext};
+use crate::plugin::{DefaultSalvaContext, SalvaContext, SalvaContextEntityLink, SalvaContextInitialization, WriteSalvaContext};
 #[allow(unused_imports)]
 use crate::plugin::SalvaPhysicsPlugin;
 
@@ -43,9 +43,12 @@ pub struct ColliderBoundaryHandle(pub BoundaryHandle);
 
 /// The component added to [`SalvaContext`] entities that declares which [`RapierContext`]
 /// entity the [`SalvaContext`] entity has its simulation coupled with.
+///
+/// Also contains the coupling manager needed for coupling rapier with salva.
 #[derive(Component)]
 pub struct SalvaRapierCouplingLink {
     pub rapier_context_entity: Entity,
+    pub coupling: ColliderCouplingSet,
 }
 
 pub fn sample_rapier_colliders(
@@ -54,17 +57,20 @@ pub fn sample_rapier_colliders(
         (Entity, &RapierColliderHandle, &RapierColliderSampling, &SalvaContextEntityLink),
         Without<ColliderBoundaryHandle>,
     >,
+    mut rapier_coupling_q: Query<&mut SalvaRapierCouplingLink>,
     mut context_writer: WriteSalvaContext,
     rapier_context: ReadDefaultRapierContext,
 ) {
     for (entity, co_handle, sampling, salva_link) in colliders.iter() {
         let mut salva_context = context_writer.context(salva_link);
+        let coupling = &mut rapier_coupling_q.get_mut(salva_link.0).unwrap().coupling;
+
         let radius = salva_context.liquid_world.particle_radius();
         let co = rapier_context.colliders.get(co_handle.0).unwrap();
         let bo_handle = salva_context
             .liquid_world
             .add_boundary(Boundary::new(Vec::new(), InteractionGroups::default()));
-        salva_context.coupling.register_coupling(
+        coupling.register_coupling(
             bo_handle,
             co_handle.0,
             match &sampling.sampling_method {
@@ -86,5 +92,27 @@ pub fn sample_rapier_colliders(
             .get_entity(entity)
             .unwrap()
             .insert(ColliderBoundaryHandle(bo_handle));
+    }
+}
+
+/// System that links the default salva context to the default rapier context
+#[cfg(feature = "rapier")]
+pub fn link_default_contexts(
+    mut commands: Commands,
+    initialization_data: Res<SalvaContextInitialization>,
+    default_salva_context: Query<Entity, (With<DefaultSalvaContext>, Without<SalvaRapierCouplingLink>)>,
+    default_rapier_context: Query<Entity, With<DefaultRapierContext>>,
+) {
+    match initialization_data.as_ref() {
+        SalvaContextInitialization::NoAutomaticSalvaContext => {}
+        SalvaContextInitialization::InitializeDefaultSalvaContext {
+            particle_radius: _particle_radius, smoothing_factor: _smoothing_factor
+        } => {
+            commands.entity(default_salva_context.get_single().unwrap())
+                .insert(SalvaRapierCouplingLink {
+                    rapier_context_entity: default_rapier_context.get_single().unwrap(),
+                    coupling: ColliderCouplingSet::new(),
+                });
+        }
     }
 }
