@@ -7,7 +7,7 @@ use salva::{math::Point, object::Fluid};
 use crate::fluid::{AppendNonPressureForces, RemoveNonPressureForcesAt};
 use crate::math::Vect;
 use crate::plugin::salva_context::SalvaContext;
-use crate::plugin::{DefaultSalvaContext, SalvaConfiguration, SalvaContextAccess, SalvaContextEntityLink, WriteDefaultSalvaContext, WriteSalvaContext};
+use crate::plugin::{DefaultSalvaContext, SalvaConfiguration, SalvaContextAccess, SalvaContextEntityLink, SimulationToRenderTime, WriteDefaultSalvaContext, WriteSalvaContext};
 
 pub fn init_fluids(
     mut commands: Commands,
@@ -148,25 +148,20 @@ pub fn sync_removals(
     }
 }
 
-// WIP: for now, just assume that everything is run in bevy's fixed update step
 pub fn step_simulation(
-    mut salva_context: Query<(&mut SalvaContext, &SalvaConfiguration)>,
+    mut salva_context: Query<(&mut SalvaContext, &SalvaConfiguration, &mut SimulationToRenderTime)>,
     time: Res<Time>,
 ) {
-    for (mut context, config) in salva_context.iter_mut() {
+    for (mut context, config, mut sim_to_render_time) in salva_context.iter_mut() {
         if !config.default_step_active {
             continue;
         }
 
-        #[cfg(feature = "dim2")]
-        context.step(
-            time.delta_secs(),
-            &config.gravity.into()
-        );
-        #[cfg(feature = "dim3")]
-        context.step(
-            time.delta_secs(),
-            &config.gravity.into()
+        context.step_simulation(
+            &time,
+            &config.gravity.into(),
+            config.timestep_mode.clone(),
+            &mut sim_to_render_time
         );
     }
 }

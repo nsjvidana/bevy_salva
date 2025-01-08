@@ -1,21 +1,22 @@
 use salva::math::Vector;
-use bevy::prelude::{Component, Entity, Mut, Query, Reflect, Resource, With};
+use bevy::prelude::{Component, Entity, Mut, Query, Reflect, Resource, Time, With};
 use salva::LiquidWorld;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use bevy::ecs::query::QueryData;
 use bevy::ecs::system::SystemParam;
 use salva::object::FluidHandle;
-use crate::plugin::configuration::SalvaConfiguration;
+use crate::plugin::{SimulationToRenderTime, configuration::SalvaConfiguration, TimestepMode};
 use salva::coupling::CouplingManager;
 
 #[cfg(feature = "rapier")]
 use salva::integrations::rapier::ColliderCouplingSet;
 #[cfg(feature = "rapier")]
 use bevy_rapier::plugin::RapierContext;
+use crate::math::Real;
 
 #[derive(Component)]
-#[require(SalvaConfiguration)]
+#[require(SalvaConfiguration, SimulationToRenderTime)]
 pub struct SalvaContext {
     pub liquid_world: LiquidWorld,
     pub entity2fluid: HashMap<Entity, FluidHandle>,
@@ -23,22 +24,76 @@ pub struct SalvaContext {
 
 impl SalvaContext {
     pub fn step_with_coupling(
-        &mut self, dt: f32,
+        &mut self,
+        time: &Time,
         gravity: &Vector<f32>,
+        timestep_mode: TimestepMode,
+        sim_to_render_time: &mut SimulationToRenderTime,
         coupling: &mut impl CouplingManager
     ) {
-        self.liquid_world.step_with_coupling(
-            dt,
-            gravity,
-            coupling
-        );
+        match timestep_mode {
+            TimestepMode::Fixed {dt, substeps} => {
+                let dt = dt/substeps as Real;
+                for _ in 0..substeps {
+                    self.liquid_world.step_with_coupling(dt, gravity, coupling);
+                }
+            },
+            TimestepMode::Variable {max_dt, time_scale, substeps} => {
+                let dt = (time.delta_secs() * time_scale).min(max_dt) / substeps as Real;
+                for _ in 0..substeps {
+                    self.liquid_world.step_with_coupling(dt, gravity, coupling);
+                }
+            },
+            TimestepMode::Interpolated {dt, time_scale, substeps} => {
+                sim_to_render_time.diff += time.delta_secs();
+
+                while sim_to_render_time.diff > 0. {
+
+                    let dt = (dt / substeps as Real) * time_scale;
+                    for _ in 0..substeps {
+                        self.liquid_world.step_with_coupling(dt, gravity, coupling);
+                    }
+
+                    sim_to_render_time.diff -= dt;
+                }
+            }
+        }
     }
 
-    pub fn step(&mut self, dt: f32, gravity: &Vector<f32>) {
-        self.liquid_world.step(
-            dt,
-            gravity
-        );
+    pub fn step_simulation(
+        &mut self,
+        time: &Time,
+        gravity: &Vector<f32>,
+        timestep_mode: TimestepMode,
+        sim_to_render_time: &mut SimulationToRenderTime
+    ) {
+        match timestep_mode {
+            TimestepMode::Fixed {dt, substeps} => {
+                let dt = dt/substeps as Real;
+                for _ in 0..substeps {
+                    self.liquid_world.step(dt, gravity);
+                }
+            },
+            TimestepMode::Variable {max_dt, time_scale, substeps} => {
+                let dt = (time.delta_secs() * time_scale).min(max_dt) / substeps as Real;
+                for _ in 0..substeps {
+                    self.liquid_world.step(dt, gravity);
+                }
+            },
+            TimestepMode::Interpolated {dt, time_scale, substeps} => {
+                sim_to_render_time.diff += time.delta_secs();
+
+                while sim_to_render_time.diff > 0. {
+
+                    let dt = (dt / substeps as Real) * time_scale;
+                    for _ in 0..substeps {
+                        self.liquid_world.step(dt, gravity);
+                    }
+
+                    sim_to_render_time.diff -= dt;
+                }
+            }
+        }
     }
 }
 

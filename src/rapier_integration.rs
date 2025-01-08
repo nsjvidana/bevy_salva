@@ -8,7 +8,7 @@ use salva::integrations::rapier::{ColliderCouplingSet, ColliderSampling};
 use salva::math::Vector;
 use salva::object::{Boundary, BoundaryHandle};
 use salva::object::interaction_groups::InteractionGroups;
-use crate::plugin::{DefaultSalvaContext, SalvaConfiguration, SalvaContext, SalvaContextEntityLink, SalvaContextInitialization, WriteSalvaContext};
+use crate::plugin::{DefaultSalvaContext, SalvaConfiguration, SalvaContext, SalvaContextEntityLink, SalvaContextInitialization, SimulationToRenderTime, WriteSalvaContext};
 #[allow(unused_imports)]
 use crate::plugin::SalvaPhysicsPlugin;
 
@@ -59,27 +59,31 @@ pub struct SalvaRapierCoupling {
 
 // WIP: for now, just assume that everything is run in bevy's fixed update step
 pub fn step_simulation_rapier_coupling(
-    mut salva_context_q: Query<(&mut SalvaContext, &mut SalvaRapierCoupling, &SalvaConfiguration)>,
+    mut salva_context_q: Query<(
+        &mut SalvaContext,
+        &mut SalvaRapierCoupling,
+        &SalvaConfiguration,
+        &mut SimulationToRenderTime
+    )>,
     mut write_rapier_context: WriteRapierContext,
     time: Res<Time>,
 ) {
-    for (mut context, mut link, config) in salva_context_q.iter_mut() {
+    for (
+        mut context,
+        mut link,
+        config,
+        mut sim_to_render_time
+    ) in salva_context_q.iter_mut() {
         let rapier_context = write_rapier_context
             .try_context_from_entity(link.rapier_context_entity)
             .expect("Couldn't find RapierContext coupled to SalvaContext entity {entity}")
             .into_inner();
 
-        #[cfg(feature = "dim2")]
         context.step_with_coupling(
-            time.delta_secs(),
+            &time,
             &config.gravity.into(),
-            &mut link.coupling
-                .as_manager_mut(&rapier_context.colliders, &mut rapier_context.bodies),
-        );
-        #[cfg(feature = "dim3")]
-        context.step_with_coupling(
-            time.delta_secs(),
-            &config.gravity.into(),
+            config.timestep_mode.clone(),
+            &mut sim_to_render_time,
             &mut link.coupling
                 .as_manager_mut(&rapier_context.colliders, &mut rapier_context.bodies),
         );
